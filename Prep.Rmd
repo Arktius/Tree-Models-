@@ -1,0 +1,154 @@
+---
+title: 'ML2: Exam Preparation'
+author: "Denis Baskan"
+date: "10 March 2019"
+output:
+  html_document: default
+  html_notebook: default
+  pdf_document: default
+---
+
+
+# Exercise: Tree Models
+In the following code, a Regression tree and Classification tree will be applied. Some parts are from the book James et. al. Lab 8.3.2.
+
+## Load Packages
+If packages are not installed, then they will be installed.
+
+
+```{r warning = FALSE}
+required.packages =  c('MASS','rpart','rpart.plot')
+
+load.packages <- function(packages){
+  
+  for (pckg in packages){
+    if (!(pckg %in% installed.packages()[,"Package"])){
+      install.packages(pckg)
+    }
+    
+    library(pckg, character.only = TRUE)
+  }
+}
+
+load.packages(required.packages)
+attach(Boston)
+```
+
+# Show Boston data set and some scatterplots
+The data set contains data on housing values and other information about Boston suburbs.
+
+```{r warning = FALSE}
+
+#?Boston # shows a description of the data set and the columns
+head(Boston)
+cat("Number of rows: ", nrow(Boston))
+cat("Number of columns: ", ncol(Boston)) 
+cat("Column names: ", colnames(Boston)) 
+
+plot(black,crim,main="Relationship between blacks and crime rate (by town)", xlab="Blacks", ylab="Crime rate", pch=19)
+plot(tax,crim,main="Relationship between paid taxes and crime rate (by town and /$10,000)", xlab="Taxes", ylab="Crime rate", pch=19)
+plot(rm,medv,main="Relationship between rooms and owner-occupied homes (in /$1000s)", xlab="Average Rooms", ylab="Owner-Occupied Homes", pch=19)
+
+```
+
+
+
+## Any suburbs with particularly high crime rate? Tax rates? Pupil-teacher ratios?
+```{r warning = FALSE}
+
+#x-axis has no meaning
+
+plot(Boston[order(Boston$crim),]$crim,main="Crime Rate", xlab="Suburb", ylab="Crime rate (by town)", pch=19,type='l')
+plot(Boston[order(Boston$tax),]$tax,main="Taxes", xlab="Suburb", ylab="Taxes", pch=19,type='l')
+plot(Boston[order(Boston$ptratio),]$ptratio,main="Pupil-Teacher ratio", xlab="Suburb", ylab="Pupil-Teacher ratio", pch=19,type='l')
+```
+
+One can observe suburbs with really high values and almost exponential slope for the column crime rate. 
+
+## Some Statistics
+```{r warning = FALSE}
+
+cat("Number of suburbs bound the Charles river: ",sum(Boston$chas==1))
+cat("Median value of pupil-teacher ratio : ",median(Boston$ptratio))
+cat("Lowest median value of owner-occupied homes : ",min(Boston$medv))
+cat("Number of suburbs with more than 7 rooms per dwelling: ",sum(Boston$rm > 7))
+cat("Number of suburbs with more than 8 rooms per dwelling: ",sum(Boston$rm > 8))
+Boston[Boston$rm > 8,] 
+
+
+#compare some data
+Boston[Boston$medv==min(Boston$medv),]
+```
+The data with more than 8 rooms have a low crime rate and high values for age, tax, black for example.
+The 2 suburbs with the lowest medv values have high values for the predictors crime, black, tax, pt-ratio. One can conclude that populations with a lower status and cheap houses are at increased risk of being a crime victim. 
+
+
+
+# Fit a Regression tree using column medv as outcome variable
+```{r warning = FALSE}
+#Note: outcome variable should be continuous. Exercise follows Lab 8.3.2 in James et al.
+set.seed(1) #set a fix random generator to reproduce the same results next time
+train = sample(1:nrow(Boston), nrow(Boston)/2)   #split data randomly
+tree.boston = rpart(medv ~.,Boston,subset=train) # create a tree
+print(tree.boston) #only 3 variables were used
+rpart.plot(tree.boston)
+```
+
+The tree indicates that a higher socioeconomic status leads in buying more expensive houses. A median house price of $46,000 can be observed when lstat is lower than 9.7% and number of rooms are higher than 7.4 on average.  
+
+## Can pruning the tree improve our model?
+Rule: Choose the smalles number of nodes (largest cp value) which lies within 1 std. dev. of the smallest deviance, i.e. lies below the dotted line.
+```{r warning = FALSE}
+printcp(tree.boston)
+plotcp(tree.boston)
+```
+
+cp=0.016 lies below the dotted line and could improve our model
+
+## Prune the tree and compare models
+```{r warning = FALSE}
+prune.boston = prune(tree.boston,cp=0.016)
+prune.boston
+rpart.plot(prune.boston)
+
+#compare models by calculating MSE (Mean Squarred Error)
+pred.train<-predict(tree.boston,newdata=Boston[train,])
+mean((Boston$medv[train]-pred.train)^2)
+pred.train.prune<-predict(prune.boston,newdata=Boston[train,])
+mean((Boston$medv[train]-pred.train.prune)^2)
+
+```
+
+
+## Calculate the MSE for the test set 
+
+```{r warning = FALSE}
+pred.test<-predict(tree.boston,newdata=Boston[-train,])
+mean((Boston$medv[-train]-pred.test)^2)
+pred.test<-predict(prune.boston,newdata=Boston[-train,])
+mean((Boston$medv[-train]-pred.test)^2)
+```
+Pruned tree performes slightly worse applied on train and test set, but we gained a simpler model. Taking the square root of the test set MSE gives $5,000 rounded. That's the range where test prediction lay in.
+
+## Plot observed median values medv agains predictions
+```{r warning = FALSE}
+boston.test=Boston[-train,"medv"]
+plot(pred.test,boston.test)
+abline(c(0,1))
+
+```
+```{r warning = FALSE}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
