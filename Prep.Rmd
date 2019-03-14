@@ -3,9 +3,9 @@ title: 'ML2: Exam Preparation'
 author: "Denis Baskan"
 date: "10 March 2019"
 output:
-  html_document: default
-  html_notebook: default
   pdf_document: default
+  html_notebook: default
+  html_document: default
 ---
 
 
@@ -17,7 +17,7 @@ If packages are not installed, then they will be installed.
 
 
 ```{r warning = FALSE}
-required.packages =  c('MASS','rpart','rpart.plot')
+required.packages =  c('MASS','rpart','rpart.plot','ROCR')
 
 load.packages <- function(packages){
   
@@ -137,8 +137,95 @@ plot(pred.test,boston.test)
 abline(c(0,1))
 
 ```
+# Classification Tree: Prostate Cancer
+
+Did the cancer recur after surgical removal of the postate?
+
+Used data set: stagec #from package rpart
 ```{r warning = FALSE}
+head(stagec)
+cat("Number of rows: ", nrow(stagec))
+cat("Number of columns: ", ncol(stagec)) 
+cat("Column names: ", colnames(stagec)) 
+cat("Recurrence of the disease: ",table(stagec$pgstat))
+
 ```
+The column pgstat is the outcome of interest.
+
+## Factorize the outcome variable & show some plots
+
+Instead of having numerical values, we would rather have "No" and "Prog". This makes reading the output easier and rpart will recognise that the outcome variable is a factor variable and so will use the Gini coefficient to calculate the loss statistic, in order to determine each splits. As pgstat is numeric rpart would assume that a regression tree is wanted, and will use mean square error for the loss function.
+
+
+```{r warning = FALSE}
+stagec$progstat <- factor(stagec$pgstat, levels = 0:1, labels = c("No", "Prog"))
+plot(stagec$g2~progstat,data=stagec )
+plot(stagec$age~progstat,data=stagec )
+barplot(table(stagec$eet,stagec$progstat),beside=TRUE,legend.text=TRUE,main="eet" )
+barplot(table(stagec$grade,stagec$progstat),beside=TRUE,legend.text=TRUE,main="grade" )
+barplot(table(stagec$gleason,stagec$progstat),beside=TRUE,legend.text=TRUE,main="gleason" )
+barplot(table(stagec$ploidy,stagec$progstat),beside=TRUE,legend.text=TRUE,main="ploidy" )
+
+
+```
+
+## Training set
+
+We use the whole data set, because we only have 146 observations.
+
+```{r warning = FALSE}
+c.tree <- rpart(progstat ~ age + eet + g2 + grade + gleason + ploidy,data = stagec)
+rpart.plot(c.tree)
+print(c.tree)
+```
+
+## Pruning the Tree
+
+As with the regression tree we should look to see if pruning the tree gives us a better model.
+
+```{r warning = FALSE}
+printcp(c.tree)
+plotcp(c.tree)
+c.pruned<-prune(c.tree,cp=0.076)
+print(c.pruned)
+rpart.plot(c.pruned)
+```
+
+## Make predictions
+
+We now set alpha = 0.5 to get the most likely of the two outcomes
+```{r warning = FALSE}
+alpha <- 0.5 #0.4
+stagec$predict<-(predict(c.pruned)[,2]>alpha)
+tt<-table(stagec$progstat,stagec$predict)
+print(tt)
+sens<-tt[2,2]/sum(tt[2,])
+spec<-tt[1,1]/sum(tt[1,])
+cat("sensitivity: ",sens,"specificity: ", spec, "sum: ", sens+spec)
+fpr <-tt[1,2]/sum(tt[,2]) #false-positive rate
+```
+
+The value of the specificity is fairly high with ~97%. It tells us how many healthy people were correctly identified as not having the condition. Whereas one cannot take into account the sensitivity. One might be more interested in detecting the patients with progression to consider further treatments. 
+
+## Draw ROC diagram and AUC
+
+
+```{r warning = FALSE}
+p <- predict(c.pruned)[,2]
+#rpart function to get the prediction for Yes
+pr <- prediction(p, stagec$progstat) #convert the predictions into ROCR format
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+#ROCR function calculates everything for the ROC curve
+plot(prf) #plot the ROC curve
+abline(c(0,1))
+points(fpr,sens)
+AUC<-performance(pr, measure ="auc")@y.values[[1]];AUC
+#RORC function calculates the AUC
+```
+
+Our model is above the diagonal and therefore better than tossing a coin. However, one might be rather interested in detecting the patients with progression. One can change the alpha value to get another model.
+If you set alpha to 0.4, then your sensitivity becomes larger, but your specificity smaller at the same time. It is similar of saying 'progression is true' each time unless there are convinving values against it. If you toss a coin and say that 80% of the events are head, then you are really good at predicting head, but not for tail.
+
 
 
 
